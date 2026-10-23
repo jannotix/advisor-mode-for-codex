@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-alpha.3 - 2026-10-23
+
+- Preserve the native CLI model-availability section when updating the generated profile.
+- Keep ownership limited to generated content so uninstall preserves native additions.
+- Correct the snapshot deletion assertion and remove an untested executable-mode claim.
+- Verify an informational task and an effective reviewer model replacement with live native events.
+- Invalidate an existing review when model configuration changes, even with unchanged files.
+- Record trusted desktop activation separately from the pending project-root review.
+
 ## 0.1.0-alpha.2 - 2026-10-23
 
 - Apply Apache-2.0 and include LICENSE and NOTICE in the plugin package.

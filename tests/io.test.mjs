@@ -6,7 +6,8 @@ import os from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
 import { snapshot } from '../lib/snapshot.mjs';
 import { transaction, statePath } from '../lib/store.mjs';
-import { setup } from '../scripts/setup.mjs';
+import { generated, setup } from '../scripts/setup.mjs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 function temporary(t) {
@@ -14,12 +15,12 @@ function temporary(t) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
-test('snapshot changes on edit, new file, deletion and executable content', t => {
+test('snapshot changes on edit, new file and deletion', t => {
   const dir = temporary(t);
   fs.writeFileSync(path.join(dir, 'a.txt'), 'one'); const first = snapshot(dir);
   fs.writeFileSync(path.join(dir, 'a.txt'), 'two'); const second = snapshot(dir); assert.notEqual(second, first);
-  fs.writeFileSync(path.join(dir, 'b.txt'), 'new'); assert.notEqual(snapshot(dir), second);
-  fs.unlinkSync(path.join(dir, 'a.txt')); assert.notEqual(snapshot(dir), second);
+  fs.writeFileSync(path.join(dir, 'b.txt'), 'new'); const afterCreate = snapshot(dir); assert.notEqual(afterCreate, second);
+  fs.unlinkSync(path.join(dir, 'a.txt')); assert.notEqual(snapshot(dir), afterCreate);
 });
 test('snapshot excludes secrets and private runtime evidence', t => {
   const dir = temporary(t); fs.writeFileSync(path.join(dir, 'source.txt'), 'stable'); const first = snapshot(dir);
@@ -44,6 +45,65 @@ test('setup refuses preexisting and locally edited agent files', t => {
   assert.deepEqual(setup('uninstall', home).preserved, ['agents/advisor_mode_reviewer.toml']);
   assert.ok(fs.existsSync(agent));
 });
+test('setup preserves only the native TUI profile extension across repeated updates and uninstall', t => {
+  const home = temporary(t); setup('install', home);
+  const profile = path.join(home, 'advisor-mode.config.toml');
+  const status = () => setup('status', home).files.find(file => file.file === 'advisor-mode.config.toml');
+  assert.equal(status().state, 'generated');
+  const tail = Buffer.from('\r\n[tui.model_availability_nux]\r\n"gpt-6-astra" = true\r\n# native setting\r\n');
+  fs.appendFileSync(profile, tail);
+  for (const model of ['future-one', 'future-two']) {
+    setup('set-model', home, ['executor', model, 'high']); setup('install', home);
+    const config = JSON.parse(fs.readFileSync(path.join(home, 'advisor-mode/config.json')));
+    const prefix = generated(config)['advisor-mode.config.toml'];
+    assert.deepEqual(fs.readFileSync(profile), Buffer.concat([Buffer.from(prefix), tail]));
+    const owned = JSON.parse(fs.readFileSync(path.join(home, 'advisor-mode/owned.json')));
+    assert.equal(owned['advisor-mode.config.toml'], createHash('sha256').update(prefix).digest('hex'));
+    assert.equal(status().state, 'preserved-extension'); assert.equal(status().matches, true);
+  }
+  const before = fs.readFileSync(profile);
+  assert.ok(setup('uninstall', home).preserved.includes('advisor-mode.config.toml'));
+  assert.deepEqual(fs.readFileSync(profile), before);
+  const normal = temporary(t); setup('install', normal);
+  assert.ok(setup('uninstall', normal).removed.includes('advisor-mode.config.toml'));
+  assert.equal(fs.existsSync(path.join(normal, 'advisor-mode.config.toml')), false);
+});
+test('setup refuses modified profile prefixes, unheaded keys and other sections without partial changes', t => {
+  for (const modify of [
+    text => text.replace('enabled = true', 'enabled = false') + '\n[tui.model_availability_nux]\nseen = true\n',
+    text => text + 'unexpected = true\n',
+    text => text + '\n[tui.model_availability_nux]\nseen = true\n[agents]\nenabled = false\n'
+  ]) {
+    const home = temporary(t); setup('install', home);
+    const profile = path.join(home, 'advisor-mode.config.toml');
+    fs.writeFileSync(profile, modify(fs.readFileSync(profile, 'utf8')));
+    const files = ['advisor-mode.config.toml', 'advisor-mode/config.json', 'advisor-mode/owned.json', 'agents/advisor_mode_executor.toml'];
+    const before = files.map(file => fs.readFileSync(path.join(home, file)));
+    for (const command of ['set-model', 'install']) {
+      assert.throws(() => setup(command, home, ['executor', 'future-model', 'high']), /overwrite/);
+      files.forEach((file, index) => assert.deepEqual(fs.readFileSync(path.join(home, file)), before[index]));
+    }
+    const status = setup('status', home).files.find(file => file.file === 'advisor-mode.config.toml');
+    assert.equal(status.matches, false); assert.equal(status.state, 'managed-modification');
+  }
+});
+test('setup refuses a profile reported as a symbolic link despite a valid TUI extension', t => {
+  const home = temporary(t); setup('install', home);
+  const profile = path.join(home, 'advisor-mode.config.toml');
+  fs.appendFileSync(profile, '\n[tui.model_availability_nux]\nseen = true\n');
+  const lstat = fs.lstatSync;
+  t.mock.method(fs, 'lstatSync', (target, options) => target === profile ? { isSymbolicLink: () => true } : lstat(target, options));
+  const before = fs.readFileSync(profile);
+  const config = fs.readFileSync(path.join(home, 'advisor-mode/config.json'));
+  assert.throws(() => setup('set-model', home, ['executor', 'future-model', 'high']), /overwrite/);
+  assert.throws(() => setup('install', home), /overwrite/);
+  assert.deepEqual(fs.readFileSync(profile), before);
+  assert.deepEqual(fs.readFileSync(path.join(home, 'advisor-mode/config.json')), config);
+  assert.equal(setup('status', home).files.find(file => file.file === 'advisor-mode.config.toml').matches, false);
+  assert.ok(setup('uninstall', home).preserved.includes('advisor-mode.config.toml'));
+  assert.deepEqual(fs.readFileSync(profile), before);
+  t.mock.restoreAll();
+});
 test('session storage rejects corruption and keeps sessions independent', async t => {
   const dir = temporary(t);
   const state = sessionId => ({ version: 1, sessionId, taskId: 't', agents: {}, reviewers: {} });
@@ -67,16 +127,20 @@ test('real concurrent processes serialize the complete read-modify-write transac
 });
 test('failed model update rolls back applied agents and remains installable', t => {
   const home = temporary(t); setup('install', home);
-  const before = fs.readFileSync(path.join(home, 'agents/advisor_mode_reviewer.toml'), 'utf8');
+  const profile = path.join(home, 'advisor-mode.config.toml');
+  fs.appendFileSync(profile, '\r\n[tui.model_availability_nux]\r\nseen = true\r\n');
+  const profileBefore = fs.readFileSync(profile);
+  const before = fs.readFileSync(path.join(home, 'agents/advisor_mode_executor.toml'), 'utf8');
   const rename = fs.renameSync;
   let injected = false;
   fs.renameSync = (source, target) => {
     if (!injected && target === path.join(home, 'advisor-mode/config.json')) { injected = true; throw new Error('injected install failure'); }
     return rename(source, target);
   };
-  try { assert.throws(() => setup('set-model', home, ['reviewer', 'future-model', 'high']), /injected/); }
+  try { assert.throws(() => setup('set-model', home, ['executor', 'future-model', 'high']), /injected/); }
   finally { fs.renameSync = rename; }
-  assert.equal(fs.readFileSync(path.join(home, 'agents/advisor_mode_reviewer.toml'), 'utf8'), before);
+  assert.equal(fs.readFileSync(path.join(home, 'agents/advisor_mode_executor.toml'), 'utf8'), before);
+  assert.deepEqual(fs.readFileSync(profile), profileBefore);
   assert.doesNotThrow(() => setup('install', home));
 });
 test('hook config error ends retries after an explicit blocked response', t => {

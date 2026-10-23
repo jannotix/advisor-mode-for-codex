@@ -4,6 +4,8 @@ Advisor Mode adds configurable executor, advisor, and independent final reviewer
 
 This is a development prerelease tested with the Windows executable bundled with the desktop app, `codex-cli 0.163.0-alpha.11.2`. Native acceptance covers correct work, rejected work, and changes after approval. Desktop activation and normal hook trust remain separate checks. A local workflow gate cannot protect its state against a process that has unrestricted access to the same files.
 
+Open the chat at the root of the project being reviewed. The plugin snapshots the chat's workspace; it does not infer a smaller scope from paths mentioned in the conversation. A parent folder containing several projects can exceed the file or byte limits, even for a small task or an informational question. Such a task remains blocked until it runs in a supported workspace.
+
 ## Workflow
 
 The default executor is `gpt-6.1-sol`. The advisor and final reviewer use `gpt-6-astra` in separate agent contexts. Each role has its own model and reasoning setting. The advisor handles design choices and repeated matching failures. A fresh reviewer reads the requirements, actual files, and verification evidence before completion.
@@ -50,6 +52,8 @@ node scripts/setup.mjs set-model executor MODEL_ID REASONING_EFFORT
 
 Start a new session after changing models. The command validates syntax; the provider determines model availability. It never silently chooses a fallback. Settings live outside the installed package and survive package updates. To pause the workflow, explicitly set `enabled` to `false` in the user configuration. The review protocol cannot be disabled independently while claiming reviewed completion.
 
+Codex can append `[tui.model_availability_nux]` to the generated CLI profile during normal use. Setup preserves that separate section byte for byte when the managed prefix is unchanged. It still refuses edits to managed settings or other unsupported profile extensions. Uninstall preserves an extended profile, since the extension belongs to the client or user.
+
 ## Removal and updates
 
 ```text
@@ -61,7 +65,9 @@ Uninstall removes only generated agent/profile files whose content still matches
 
 ## Verification and limits
 
-On 2026-10-23, 24 local behavioral tests passed. Package validation, isolated installation, and discovery of all six hooks passed with the desktop app's `codex-cli 0.163.0-alpha.11.2`. Live tests used `gpt-6.1-sol` with separate `gpt-6-astra` advisor and reviewer agents. Correct work reached REVIEWED. Incorrect work received CHANGES_REQUIRED and ended BLOCKED without approval. A test changed the artifact after accepted review; Stop detected the change, requested a new review, and ended BLOCKED after the reviewer proved the defect. An unavailable reviewer model also ended BLOCKED, with no alternate reviewer model or approval.
+On 2026-10-23, 30 local behavioral tests passed. Package validation, isolated installation, and discovery of all six hooks passed with the desktop app's `codex-cli 0.163.0-alpha.11.2`. Live tests used `gpt-6.1-sol` with separate `gpt-6-astra` advisor and reviewer agents. Correct work reached REVIEWED. Incorrect work received CHANGES_REQUIRED and ended BLOCKED without approval. A test changed the artifact after accepted review; Stop detected the change, requested a new review, and ended BLOCKED after the reviewer proved the defect. An unavailable reviewer model also ended BLOCKED, with no alternate reviewer model or approval.
+
+Additional live checks verified an informational answer with no workspace changes and a reviewer changed to `gpt-6.1-sol`, retained through reinstall and observed in the actual native callback. Trusted hook and role loading have been observed in the desktop chat. Its final positive review remains pending because that chat uses a parent workspace exceeding 20000 files. This prerelease is not a completed desktop release certificate.
 
 Earlier probes failed because the portable package format omitted hooks and the live fixture did not expose its roles. The current live fixture passes process-only hook and role declarations to the native client, reusing account authentication without changing the main profile. A separate isolated installed-plugin test verifies package discovery and Stop continuation with a deterministic local API fixture. Those two tests establish different parts of the contract; they do not certify every desktop UI path or host version.
 
@@ -73,6 +79,8 @@ node tests/native-flow.mjs /absolute/path/to/codex valid
 node tests/native-flow.mjs /absolute/path/to/codex invalid
 node tests/native-flow.mjs /absolute/path/to/codex stale
 node tests/native-flow.mjs /absolute/path/to/codex unavailable
+node tests/native-flow.mjs /absolute/path/to/codex noncode
+node tests/native-flow.mjs /absolute/path/to/codex replacement
 node tests/native-protocol.mjs /absolute/path/to/codex
 ```
 

@@ -5,11 +5,12 @@ import { gate } from '../lib/gate.mjs';
 
 const config = JSON.parse(readFileSync(new URL('../advisor-config.json', import.meta.url)));
 function fixture() {
+  const fixtureConfig = structuredClone(config);
   let state = null;
   let snapshot = 'a'.repeat(64);
   let n = 0;
   const run = (event, data = {}) => {
-    const result = gate(state, { hook_event_name: event, session_id: 'session-A', cwd: '/workspace', model: config.roles.executor.model, ...data }, config, { snapshot: () => snapshot, nonce: () => `nonce-${++n}` });
+    const result = gate(state, { hook_event_name: event, session_id: 'session-A', cwd: '/workspace', model: fixtureConfig.roles.executor.model, ...data }, fixtureConfig, { snapshot: () => snapshot, nonce: () => `nonce-${++n}` });
     state = result.state;
     return result.output;
   };
@@ -20,7 +21,7 @@ function fixture() {
     const review = { taskId: state.taskId, snapshot: record.snapshot, nonce: record.nonce, verdict: 'APPROVED', checks: [{ name: 'acceptance', status: 'PASS', evidence: 'node --test: exit 0; assertion checks the requested behavior' }], findings: [], ...overrides };
     return run('SubagentStop', { agent_id: 'review-1', agent_type: 'advisor_mode_reviewer', model: config.roles.reviewer.model, last_assistant_message: `ADVISOR_MODE_REVIEW ${JSON.stringify(review)}`, ...data });
   };
-  return { run, start, finish, get state() { return state; }, change: () => { snapshot = 'b'.repeat(64); } };
+  return { run, start, finish, config: fixtureConfig, get state() { return state; }, change: () => { snapshot = 'b'.repeat(64); } };
 }
 
 test('missing review requests continuation and never approves', () => {
@@ -46,6 +47,16 @@ test('a change after review invalidates completion', () => {
   const f = fixture(); f.start(); f.finish(); f.change();
   assert.equal(f.run('Stop').decision, 'block');
   assert.equal(f.state.approval, null);
+});
+test('a model configuration change invalidates approval with unchanged workspace content', () => {
+  const f = fixture(); f.start(); f.finish();
+  assert.equal(f.state.approval.snapshot, 'a'.repeat(64));
+  const previousConfigHash = f.state.configHash;
+  f.config.roles.reviewer.model = 'replacement-reviewer';
+  assert.equal(f.run('Stop').decision, 'block');
+  assert.notEqual(f.state.configHash, previousConfigHash);
+  assert.equal(f.state.approval, null);
+  assert.deepEqual(f.state.reviewers, {});
 });
 test('wrong model and unrelated role cannot supply a review', () => {
   const f = fixture(); f.start({ model: 'wrong-model' });

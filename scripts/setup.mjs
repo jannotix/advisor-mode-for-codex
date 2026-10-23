@@ -7,6 +7,25 @@ import { replaceFiles } from '../lib/install-files.mjs';
 
 const hash = text => createHash('sha256').update(text).digest('hex');
 const quote = JSON.stringify;
+const profile = 'advisor-mode.config.toml';
+function installedFile(home, file, expected, prefix) {
+  const target = path.join(home, file);
+  const stat = fs.lstatSync(target, { throwIfNoEntry: false });
+  if (!stat) return { matches: false, state: 'missing' };
+  if (stat.isSymbolicLink() || !stat.isFile()) return { matches: false, state: 'linked-or-special' };
+  const content = fs.readFileSync(target);
+  if (hash(content) === expected) return { matches: true, state: 'generated' };
+  if (file === profile && prefix.endsWith('\n') && hash(prefix) === expected) {
+    const start = Buffer.from(prefix);
+    const tail = content.subarray(start.length);
+    const text = tail.toString('utf8');
+    const header = /^(?:[ \t]*\r?\n)*\[tui\.model_availability_nux\][ \t]*\r?\n/.exec(text);
+    if (content.subarray(0, start.length).equals(start) && header && !/^[ \t]*\[/m.test(text.slice(header[0].length))) {
+      return { matches: true, state: 'preserved-extension', tail };
+    }
+  }
+  return { matches: false, state: 'managed-modification' };
+}
 export function generated(config) {
   const files = {};
   const craft = fs.readFileSync(path.join(root, 'rules/craft.md'), 'utf8');
@@ -35,8 +54,9 @@ function applySetup(command, home, args) {
   const allowed = new Set([...Object.values(roles).map(role => `agents/${role}.toml`), 'advisor-mode.config.toml']);
   if (Object.keys(owned).some(key => !allowed.has(key))) throw new Error('Invalid ownership record.');
   const current = fs.existsSync(configFile) ? validateConfig(JSON.parse(fs.readFileSync(configFile, 'utf8'))) : defaults();
+  const previous = generated(current);
   if (command === 'status') return { configured: fs.existsSync(configFile), home, config: current,
-    files: Object.keys(generated(current)).map(file => ({ file, matches: fs.existsSync(path.join(home, file)) && hash(fs.readFileSync(path.join(home, file))) === owned[file] })),
+    files: Object.keys(previous).map(file => { const { matches, state } = installedFile(home, file, owned[file], previous[file]); return { file, matches, state }; }),
     activation: 'UNVERIFIED: file presence does not prove plugin loading or hook trust.' };
   if (command === 'uninstall') {
     const removed = [], preserved = [];
@@ -57,9 +77,12 @@ function applySetup(command, home, args) {
     config.roles[role] = { model, reasoningEffort }; validateConfig(config);
   }
   const files = generated(config);
+  const tails = {};
   for (const file of Object.keys(files)) {
     const target = path.join(home, file);
-    if (fs.existsSync(target) && (fs.lstatSync(target).isSymbolicLink() || hash(fs.readFileSync(target)) !== owned[file])) throw new Error(`Refusing to overwrite user-owned or modified file: ${target}`);
+    const installed = installedFile(home, file, owned[file], previous[file]);
+    if (installed.state !== 'missing' && !installed.matches) throw new Error(`Refusing to overwrite user-owned or modified file: ${target}`);
+    if (installed.tail) tails[file] = installed.tail;
     const parent = path.dirname(target);
     if (fs.existsSync(parent) && fs.lstatSync(parent).isSymbolicLink()) throw new Error(`Refusing linked directory: ${parent}`);
   }
@@ -68,7 +91,7 @@ function applySetup(command, home, args) {
   const changes = {};
   for (const [file, content] of Object.entries(files)) {
     const target = path.join(home, file);
-    changes[target] = content; next[file] = hash(content);
+    changes[target] = tails[file] ? Buffer.concat([Buffer.from(content), tails[file]]) : content; next[file] = hash(content);
   }
   changes[configFile] = JSON.stringify(config, null, 2) + '\n';
   changes[ownedFile] = JSON.stringify(next, null, 2) + '\n';
