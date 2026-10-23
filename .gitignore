@@ -1,0 +1,5 @@
+private docs/
+.test-artifacts/
+node_modules/
+*.tmp
+dist/

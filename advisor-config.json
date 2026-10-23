@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "enabled": true,
+  "roles": {
+    "executor": { "model": "gpt-6.1-sol", "reasoningEffort": "medium" },
+    "advisor": { "model": "gpt-6-astra", "reasoningEffort": "low" },
+    "reviewer": { "model": "gpt-6-astra", "reasoningEffort": "low" }
+  },
+  "maxReviewContinuations": 2,
+  "maxConsecutiveFailures": 2
+}

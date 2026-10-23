@@ -1,0 +1,12 @@
+{
+  "name": "advisor-mode-for-codex",
+  "version": "0.1.0-alpha.1",
+  "private": true,
+  "type": "module",
+  "description": "Configurable executor, advisor, and final review workflow for local Codex.",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "check": "node scripts/check.mjs"
+  },
+  "engines": { "node": ">=22" }
+}

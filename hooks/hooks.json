@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/scripts/hook.mjs\" SessionStart", "timeout": 20 }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/scripts/hook.mjs\" UserPromptSubmit", "timeout": 20 }] }],
+    "SubagentStart": [{ "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/scripts/hook.mjs\" SubagentStart", "timeout": 20 }] }],
+    "SubagentStop": [{ "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/scripts/hook.mjs\" SubagentStop", "timeout": 20 }] }],
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/scripts/hook.mjs\" PostToolUse", "timeout": 20 }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "node \"${PLUGIN_ROOT}/scripts/hook.mjs\" Stop", "timeout": 20 }] }]
+  }
+}
