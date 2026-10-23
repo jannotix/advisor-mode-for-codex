@@ -2,7 +2,7 @@
 
 Advisor Mode adds configurable executor, advisor, and independent final reviewer roles to local Codex sessions. Install it once in a personal profile and use it across workspaces.
 
-This is a development prerelease. Native host validation is blocked: installation succeeds, but the tested local exec sessions did not run the plugin hooks. Do not activate this version for production work. A local workflow gate cannot protect its state against a process that has unrestricted access to the same files.
+This is a development prerelease tested with the Windows executable bundled with the desktop app, `codex-cli 0.163.0-alpha.11.2`. Native acceptance covers correct work, rejected work, and changes after approval. Desktop activation and normal hook trust remain separate checks. A local workflow gate cannot protect its state against a process that has unrestricted access to the same files.
 
 ## Workflow
 
@@ -20,7 +20,7 @@ The work standards cover small complete changes, meaningful checks, concrete pro
 
 ## Personal installation
 
-The commands below describe the installation procedure. Use a disposable profile until the native loading blocker is resolved. Build the package from this repository first:
+Build the package from this repository first. Run `codex --version` and use a client that supports the configured models; an older executable on PATH may reject them even when the desktop app supports them.
 
 ```text
 node scripts/package.mjs
@@ -30,6 +30,8 @@ codex plugin add advisor-mode-for-codex@advisor-mode-local
 ```
 
 The marketplace points to the generated `dist/advisor-mode-for-codex` directory. The package allowlist excludes tests, internal planning, evidence, and repository metadata. Keep the source directory available while using a local marketplace.
+
+The package uses `.codex-plugin/plugin.json`. Do not add a root portable `plugin.json`: the verified host selects that format and omits its lifecycle hooks. Native `hooks/list` must report all six plugin hooks before activation. The installation check verifies that condition.
 
 Review and trust the plugin's hooks in Codex, then start a new session. Installing files does not grant hook trust. In CLI, use `/hooks` to inspect the definitions. Do not use a hook-trust bypass for normal installation.
 
@@ -59,9 +61,9 @@ Uninstall removes only generated agent/profile files whose content still matches
 
 ## Verification and limits
 
-On 2026-10-23, 22 local behavioral tests passed. Package validation and isolated installation passed with the desktop app's `codex-cli 0.163.0-alpha.11.2`. A direct request to `gpt-6.1-sol` succeeded with that executable. The separate PATH executable, `0.157.0`, rejected that model.
+On 2026-10-23, 24 local behavioral tests passed. Package validation, isolated installation, and discovery of all six hooks passed with the desktop app's `codex-cli 0.163.0-alpha.11.2`. Live tests used `gpt-6.1-sol` with separate `gpt-6-astra` advisor and reviewer agents. Correct work reached REVIEWED. Incorrect work received CHANGES_REQUIRED and ended BLOCKED without approval. A test changed the artifact after accepted review; Stop detected the change, requested a new review, and ended BLOCKED after the reviewer proved the defect. An unavailable reviewer model also ended BLOCKED, with no alternate reviewer model or approval.
 
-Two live workflow probes did not expose the configured custom agents or execute the observed hooks. Two deterministic API fixture probes also completed without hook continuation or review state. These are failed host acceptance tests, not passing review tests. They do not establish whether the cause is configuration discovery, runtime behavior, or another integration constraint. The main user profile remains unchanged. The independent source review and unit suite cannot replace native lifecycle evidence.
+Earlier probes failed because the portable package format omitted hooks and the live fixture did not expose its roles. The current live fixture passes process-only hook and role declarations to the native client, reusing account authentication without changing the main profile. A separate isolated installed-plugin test verifies package discovery and Stop continuation with a deterministic local API fixture. Those two tests establish different parts of the contract; they do not certify every desktop UI path or host version.
 
 ```text
 node --test tests/*.test.mjs
@@ -69,6 +71,8 @@ node scripts/check.mjs
 node tests/native-install.mjs /absolute/path/to/codex
 node tests/native-flow.mjs /absolute/path/to/codex valid
 node tests/native-flow.mjs /absolute/path/to/codex invalid
+node tests/native-flow.mjs /absolute/path/to/codex stale
+node tests/native-flow.mjs /absolute/path/to/codex unavailable
 node tests/native-protocol.mjs /absolute/path/to/codex
 ```
 
@@ -76,8 +80,12 @@ Snapshots include tracked and untracked non-ignored Git files. Outside Git, the 
 
 Content equality at review start, review end, and completion does not prove uninterrupted immutability. Stop all writers before review. Hook continuation matching is cooperative, based on an exact generated prompt digest, and is not authentication. Agents inherit the parent permissions; review instructions do not create an independent read-only sandbox.
 
+Automatic repeated-failure counting requires structured exit codes or tool error flags. The verified native Bash callbacks provide output text without an exit code, so that path relies on the agent's two-strike instructions. The plugin does not guess command failure from arbitrary output text. The final review gate still verifies the recorded reviewer and workspace snapshot.
+
 Hooks can be disabled or untrusted. Host hook failures may continue execution. Stop asks the model to continue and does not retract text already delivered. This plugin records review status and requests correction; it does not provide a tamper-proof security boundary or a guarantee that the model cannot say an unsupported sentence.
 
 The current public plugin directory excludes lifecycle hooks. GitHub distribution, directory acceptance, and official product adoption are separate steps. No publication or submission is part of this prerelease work.
 
-The project has no public license selection yet. Choose a license before publication.
+## License
+
+Copyright 2026 Gianluca Iannotta. Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

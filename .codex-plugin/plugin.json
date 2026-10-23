@@ -1,9 +1,15 @@
 {
   "name": "advisor-mode-for-codex",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
+  "license": "Apache-2.0",
   "description": "Use configurable executor, advisor, and independent final reviewer roles across local Codex workspaces.",
-  "author": { "name": "Gianluca Iannotta" },
+  "author": {
+    "name": "Gianluca Iannotta"
+  },
   "skills": "./skills",
   "hooks": "./hooks/hooks.json",
-  "interface": { "displayName": "Advisor Mode for Codex", "shortDescription": "Configurable advice and independent final task review." }
+  "interface": {
+    "displayName": "Advisor Mode for Codex",
+    "shortDescription": "Configurable advice and independent final task review."
+  }
 }

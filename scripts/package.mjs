@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { root } from '../lib/config.mjs';
 
-export const packageEntries = ['plugin.json', '.codex-plugin', 'advisor-config.json', 'agents', 'hooks', 'lib', 'locales', 'rules', 'skills', 'scripts/hook.mjs', 'scripts/setup.mjs', 'README.md', 'CHANGELOG.md'];
+export const packageEntries = ['.codex-plugin', 'advisor-config.json', 'agents', 'hooks', 'lib', 'locales', 'rules', 'skills', 'scripts/hook.mjs', 'scripts/setup.mjs', 'README.md', 'CHANGELOG.md', 'LICENSE', 'NOTICE'];
 export function buildPackage() {
   const target = path.join(root, 'dist', 'advisor-mode-for-codex');
   // Delete only this fixed generated directory, after checking its resolved parent.

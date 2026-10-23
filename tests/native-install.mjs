@@ -18,11 +18,19 @@ try {
     if (r.status !== 0) break;
     if (args[0] === 'plugin' && args[1] === 'add') {
       const installed = JSON.parse(r.stdout).installedPath;
-      for (const excluded of ['private docs', 'tests', '.git', '.agents', 'AGENTS.md', 'CLAUDE.md']) {
+      for (const required of ['LICENSE', 'NOTICE']) if (!fs.existsSync(path.join(installed, required))) throw new Error(`Missing license file: ${required}`);
+      for (const excluded of ['private docs', 'tests', '.git', '.agents', 'AGENTS.md', 'CLAUDE.md', 'plugin.json']) {
         if (fs.existsSync(path.join(installed, excluded))) throw new Error(`Private or development file entered package: ${excluded}`);
       }
     }
   }
+  const discovery = spawnSync(process.execPath, [path.join(root, 'tests/native-discovery.mjs'), executable, home, home], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
+  if (discovery.status !== 0) throw new Error('Native hook discovery failed.');
+  const listed = JSON.parse(discovery.stdout).hooks.result.data.flatMap(entry => entry.hooks);
+  const pluginHooks = listed.filter(hook => hook.pluginId === 'advisor-mode-for-codex@advisor-mode-local');
+  const expected = ['postToolUse', 'sessionStart', 'userPromptSubmit', 'subagentStart', 'subagentStop', 'stop'].sort();
+  if (JSON.stringify(pluginHooks.map(hook => hook.eventName).sort()) !== JSON.stringify(expected)) throw new Error('Native plugin hook event set does not match the required six events.');
+  evidence.push({ check: 'native hook discovery', exit: 0, events: pluginHooks.map(hook => hook.eventName) });
   console.log(JSON.stringify({ home, evidence }, null, 2));
   process.exitCode = evidence.some(e => e.exit !== 0) ? 1 : 0;
 } finally {
