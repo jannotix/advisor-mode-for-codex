@@ -2,6 +2,9 @@
 
 ## 0.1.0-alpha.4 - 2026-10-24
 
+- Prepare a manual-install release archive with its local marketplace, installation instructions, source commit and checksum.
+- Validate installation from the extracted archive without rebuilding it from source.
+
 - Select directories and files for one task in a chat containing multiple projects.
 - Expand coverage with `scope add`; invalidate pending and accepted reviews when coverage changes.
 - Bind reviewer receipts to the selected scope, revision, configuration and content, with an explicit scope-completeness assertion.

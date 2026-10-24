@@ -2,7 +2,7 @@
 
 Advisor Mode adds configurable executor, advisor, and independent final reviewer roles to local Codex sessions. Install it once in a personal profile and use it across workspaces.
 
-This is a development prerelease tested with the Windows executable bundled with the desktop app, `codex-cli 0.163.0-alpha.11.2`. Native acceptance covers correct work, rejected work, and changes after approval. Desktop activation and normal hook trust remain separate checks. A local workflow gate cannot protect its state against a process that has unrestricted access to the same files.
+This independent project is a development prerelease tested with the Windows executable bundled with the desktop app, `codex-cli 0.163.0-alpha.11.2`. Native acceptance covers correct work, rejected work, and changes after approval. It is not an official OpenAI plugin. A local workflow gate cannot protect its state against a process that has unrestricted access to the same files.
 
 By default, the plugin snapshots the chat's workspace. A chat containing several projects can select the directories and files involved in its current task. The selection is explicit; mentioning a path in the conversation does not change coverage. Select the scope before starting a reviewer if the parent workspace exceeds the snapshot limits.
 
@@ -22,7 +22,23 @@ The work standards cover small complete changes, meaningful checks, concrete pro
 
 ## Personal installation
 
-Build the package from this repository first. Run `codex --version` and use a client that supports the configured models; an older executable on PATH may reject them even when the desktop app supports them.
+Run `codex --version` and use a client that supports the configured models; an older executable on PATH may reject them even when the desktop app supports them.
+
+### From a release archive
+
+Extract the versioned release ZIP and follow its outer `INSTALL.md`. From the extracted root:
+
+```text
+node dist/advisor-mode-for-codex/scripts/setup.mjs install
+codex plugin marketplace add "/absolute/path/to/extracted-release"
+codex plugin add advisor-mode-for-codex@advisor-mode-local
+```
+
+The archive includes the built plugin and local marketplace. It needs no source checkout or build step. Keep the extracted directory available while the marketplace is registered. The README you are reading inside `dist/advisor-mode-for-codex` is the plugin's documentation; installation starts from the outer archive directory.
+
+### From a source checkout
+
+The source marketplace points to `dist`, which Git does not track. Build before registering that checkout:
 
 ```text
 node scripts/package.mjs
@@ -31,7 +47,7 @@ codex plugin marketplace add "/absolute/path/to/Advisor mode for Codex"
 codex plugin add advisor-mode-for-codex@advisor-mode-local
 ```
 
-The marketplace points to the generated `dist/advisor-mode-for-codex` directory. The package allowlist excludes tests, internal planning, evidence, and repository metadata. Keep the source directory available while using a local marketplace.
+The marketplace points to the generated `dist/advisor-mode-for-codex` directory. The package allowlist excludes tests, internal planning, evidence, and repository metadata. Keep the source directory available while using its local marketplace. Registering an unbuilt source repository directly as a GitHub marketplace is not a supported installation route.
 
 The package uses `.codex-plugin/plugin.json`. Do not add a root portable `plugin.json`: the verified host selects that format and omits its lifecycle hooks. Native `hooks/list` must report all six plugin hooks before activation. The installation check verifies that condition.
 
@@ -42,6 +58,8 @@ Setup adds three personal agents, `advisor-mode.config.toml`, and `advisor-mode/
 For a disposable profile, add `--home /absolute/test/home` to setup and set CODEX_HOME to that directory for native plugin commands. Do not copy credentials into test artifacts.
 
 ## Configuration
+
+Run these commands from the plugin root: the source checkout root, or `dist/advisor-mode-for-codex` inside an extracted release.
 
 ```text
 node scripts/setup.mjs status
@@ -74,20 +92,22 @@ This is a cooperative review scope. It does not restrict shell access or prove t
 
 ## Removal and updates
 
+Run setup from the same plugin root used for configuration:
+
 ```text
 codex plugin remove advisor-mode-for-codex@advisor-mode-local
 node scripts/setup.mjs uninstall
 ```
 
-Uninstall removes only generated agent/profile files whose content still matches the ownership record. It preserves edited files and the settings/evidence directory. Native marketplace removal is optional if you want to keep the source registered. Rebuild and reinstall the package for updates; rerun setup to refresh unchanged personal agent files. Modified hook definitions require renewed trust.
+Uninstall removes only generated agent/profile files whose content still matches the ownership record. It preserves edited files and the settings/evidence directory. Native marketplace removal is optional if you want to keep it registered. For updates, extract the new release and register its directory, or rebuild the source checkout; rerun setup and plugin installation. Modified hook definitions require normal trust review.
 
 ## Verification and limits
 
-On 2026-10-24, the alpha.4 source passed 65 local tests and package validation. Real-model scoped tests used a non-Git container with 20001 unrelated files, two selected repositories and one selected container file. The positive case reached REVIEWED. In the stale case, a controlled change to the second project after approval caused Stop to invalidate the receipt; a fresh reviewer proved the arithmetic defect and the task ended BLOCKED with no approval. Both test harnesses exited 0. The corrected package also passed clean-copy isolated installation, six-hook discovery and deterministic Stop continuation. These results do not replace the updated desktop pilot check.
+On 2026-10-24, the alpha.4 source passed 65 local tests and package validation. Real-model scoped tests used a non-Git container with 20001 unrelated files, two selected repositories and one selected container file. The positive case reached REVIEWED. In the stale case, a controlled change to the second project after approval caused Stop to invalidate the receipt; a fresh reviewer proved the arithmetic defect and the task ended BLOCKED with no approval. Both test harnesses exited 0. The corrected package also passed clean-copy isolated installation, six-hook discovery and deterministic Stop continuation.
 
 On 2026-10-23, 30 local behavioral tests passed. Package validation, isolated installation, and discovery of all six hooks passed with the desktop app's `codex-cli 0.163.0-alpha.11.2`. Live tests used `gpt-6.1-sol` with separate `gpt-6-astra` advisor and reviewer agents. Correct work reached REVIEWED. Incorrect work received CHANGES_REQUIRED and ended BLOCKED without approval. A test changed the artifact after accepted review; Stop detected the change, requested a new review, and ended BLOCKED after the reviewer proved the defect. An unavailable reviewer model also ended BLOCKED, with no alternate reviewer model or approval.
 
-Additional live checks verified an informational answer with no workspace changes and a reviewer changed to `gpt-6.1-sol`, retained through reinstall and observed in the actual native callback. Trusted alpha.2 hook and role loading have been observed in the desktop chat. Alpha.4 adds explicit task scopes to address its oversized parent workspace; the updated desktop installation and final positive receipt remain separate checks. This prerelease is not a completed desktop release certificate.
+Additional live checks verified an informational answer with no workspace changes and a reviewer changed to `gpt-6.1-sol`, retained through reinstall and observed in the actual native callback. The alpha.4 personal desktop installation exposes six enabled, trusted hooks. A fresh Astra reviewer in that desktop chat received a native scope-bound nonce and produced an APPROVED receipt accepted by SubagentStop. A real concurrent edit to a selected shared record was rejected before a subsequent fresh review approved stable content. These observations establish reviewer acceptance; they do not alone prove the parent Stop event's outcome or certify every desktop path.
 
 Earlier probes failed because the portable package format omitted hooks and the live fixture did not expose its roles. The current live fixture passes process-only hook and role declarations to the native client, reusing account authentication without changing the main profile. A separate isolated installed-plugin test verifies package discovery and Stop continuation with a deterministic local API fixture. Those two tests establish different parts of the contract; they do not certify every desktop UI path or host version.
 
@@ -106,6 +126,8 @@ node tests/native-flow.mjs /absolute/path/to/codex scoped-stale
 node tests/native-protocol.mjs /absolute/path/to/codex
 ```
 
+The commands above require a source checkout; tests are not included in the release ZIP. Build a release archive from a clean Git checkout on Windows with `powershell.exe -NoProfile -File scripts/release.ps1`. The archive records its source commit and version and has a SHA-256 checksum. Validate that exact archive with `node tests/native-release.mjs /absolute/path/to/archive.zip /absolute/path/to/codex`; this test extracts and installs it in a disposable profile without rebuilding its contents.
+
 Snapshots include tracked and untracked non-ignored Git files. Outside Git, the helper scans ordinary files. It excludes `.git`, `node_modules`, `private docs`, `.test-artifacts`, `.next`, `.venv`, `__pycache__`, `.env` files, common private key files, `auth.json`, and `credentials.json`. It rejects symlinks and special files. Limits are 20000 files and 128 MiB per snapshot. Excluded files and remote effects require separate review evidence. Tests must not rely on the snapshot as proof for those effects.
 
 An explicitly selected eligible file is included even if Git ignores it. Adding its parent keeps that selection. The multi-project native fixtures capture a prelaunch baseline of selected content and verify that the baseline remains unchanged; they make no assertion about unselected files. Native test agents use `fork_turns: "none"` because ephemeral CLI sessions may lack the stored rollout needed for inherited context.
@@ -116,7 +138,7 @@ Automatic repeated-failure counting requires structured exit codes or tool error
 
 Hooks can be disabled or untrusted. Host hook failures may continue execution. Stop asks the model to continue and does not retract text already delivered. This plugin records review status and requests correction; it does not provide a tamper-proof security boundary or a guarantee that the model cannot say an unsupported sentence.
 
-The current public plugin directory excludes lifecycle hooks. GitHub distribution, directory acceptance, and official product adoption are separate steps. No publication or submission is part of this prerelease work.
+OpenAI's [distribution documentation](https://developers.openai.com/plugins/build/plugins#bundled-mcp-servers-and-lifecycle-hooks), checked on 2026-10-24, permits manual installation of hook-based plugins and excludes them from the public plugin directory. This release uses manual distribution. Official adoption would require a separate decision by OpenAI.
 
 ## License
 
