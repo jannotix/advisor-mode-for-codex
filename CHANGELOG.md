@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.0-alpha.4 - 2026-10-24
+
+- Select directories and files for one task in a chat containing multiple projects.
+- Expand coverage with `scope add`; invalidate pending and accepted reviews when coverage changes.
+- Bind reviewer receipts to the selected scope, revision, configuration and content, with an explicit scope-completeness assertion.
+- Preserve selected coverage across resume and hook continuations; reset it for a new user request.
+- Apply file and byte limits across all selected entries and reject junctions, excluded paths and paths outside the native workspace.
+- Retain deleted selections in the snapshot and preserve the review retry budget when changing scope.
+- Retain explicit child selections when a Git parent ignores them; count overlapping files once.
+- Retry transient Windows state-file rename errors within a bounded interval while preserving atomic replacement and the previous file on failure.
+
 ## 0.1.0-alpha.3 - 2026-10-23
 
 - Preserve the native CLI model-availability section when updating the generated profile.

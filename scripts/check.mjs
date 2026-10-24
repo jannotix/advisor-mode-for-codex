@@ -21,5 +21,5 @@ for (const [event, groups] of Object.entries(hooks.hooks)) {
     assert.ok(hook.timeout >= 5);
   }
 }
-for (const file of ['scripts/hook.mjs', 'scripts/setup.mjs', 'skills/advisor-mode/SKILL.md', 'rules/craft.md']) assert.ok(fs.existsSync(path.join(root, file)));
+for (const file of ['scripts/hook.mjs', 'scripts/setup.mjs', 'scripts/scope.mjs', 'skills/advisor-mode/SKILL.md', 'rules/craft.md']) assert.ok(fs.existsSync(path.join(root, file)));
 console.log(JSON.stringify({ package: manifest.name, version: manifest.version, hooks: Object.keys(hooks.hooks), result: 'PASS' }));

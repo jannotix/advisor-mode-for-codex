@@ -4,7 +4,7 @@ Advisor Mode adds configurable executor, advisor, and independent final reviewer
 
 This is a development prerelease tested with the Windows executable bundled with the desktop app, `codex-cli 0.163.0-alpha.11.2`. Native acceptance covers correct work, rejected work, and changes after approval. Desktop activation and normal hook trust remain separate checks. A local workflow gate cannot protect its state against a process that has unrestricted access to the same files.
 
-Open the chat at the root of the project being reviewed. The plugin snapshots the chat's workspace; it does not infer a smaller scope from paths mentioned in the conversation. A parent folder containing several projects can exceed the file or byte limits, even for a small task or an informational question. Such a task remains blocked until it runs in a supported workspace.
+By default, the plugin snapshots the chat's workspace. A chat containing several projects can select the directories and files involved in its current task. The selection is explicit; mentioning a path in the conversation does not change coverage. Select the scope before starting a reviewer if the parent workspace exceeds the snapshot limits.
 
 ## Workflow
 
@@ -54,6 +54,24 @@ Start a new session after changing models. The command validates syntax; the pro
 
 Codex can append `[tui.model_availability_nux]` to the generated CLI profile during normal use. Setup preserves that separate section byte for byte when the managed prefix is unchanged. It still refuses edits to managed settings or other unsupported profile extensions. Uninstall preserves an extended profile, since the extension belongs to the client or user.
 
+## Chats with multiple projects
+
+The task hook supplies the installed command path, native session ID and current task ID. Use those values to select existing directories or files before editing or starting the reviewer:
+
+```text
+node /installed/plugin/scripts/scope.mjs set --session SESSION_ID --task TASK_ID --path "project-a" --path "project-b" --path "roadmap.md"
+node /installed/plugin/scripts/scope.mjs status --session SESSION_ID --task TASK_ID
+node /installed/plugin/scripts/scope.mjs add --session SESSION_ID --task TASK_ID --path "shared-contracts"
+```
+
+Relative paths resolve from the native chat workspace. The command rejects missing paths, excluded files, junctions and paths outside that workspace. Select the containing directory when creating a new file. `status` reads without changing state. The command cannot create a task or approve work.
+
+Coverage can expand within a task, but cannot shrink after selection or review. Adding a parent directory retains explicitly selected children, including eligible files ignored by Git. Overlapping selections count each file once. An expanded scope invalidates pending and accepted reviews, even if content has not changed. The next reviewer must inspect the complete selection and affirm that it covers the requested work. Deleted selections remain represented in the content digest.
+
+Resume and hook continuations retain the selection. A new user request starts a new task with the whole workspace selected. Snapshot limits apply to the aggregate selection: 20000 files and 128 MiB. Selecting several projects does not multiply those limits.
+
+This is a cooperative review scope. It does not restrict shell access or prove that files outside the selection were untouched. The executor must declare the requested paths and external effects; the reviewer must compare them with the task and available change evidence. Out-of-scope files and remote effects need separate evidence.
+
 ## Removal and updates
 
 ```text
@@ -65,9 +83,11 @@ Uninstall removes only generated agent/profile files whose content still matches
 
 ## Verification and limits
 
+On 2026-10-24, the alpha.4 source passed 65 local tests and package validation. Real-model scoped tests used a non-Git container with 20001 unrelated files, two selected repositories and one selected container file. The positive case reached REVIEWED. In the stale case, a controlled change to the second project after approval caused Stop to invalidate the receipt; a fresh reviewer proved the arithmetic defect and the task ended BLOCKED with no approval. Both test harnesses exited 0. The corrected package also passed clean-copy isolated installation, six-hook discovery and deterministic Stop continuation. These results do not replace the updated desktop pilot check.
+
 On 2026-10-23, 30 local behavioral tests passed. Package validation, isolated installation, and discovery of all six hooks passed with the desktop app's `codex-cli 0.163.0-alpha.11.2`. Live tests used `gpt-6.1-sol` with separate `gpt-6-astra` advisor and reviewer agents. Correct work reached REVIEWED. Incorrect work received CHANGES_REQUIRED and ended BLOCKED without approval. A test changed the artifact after accepted review; Stop detected the change, requested a new review, and ended BLOCKED after the reviewer proved the defect. An unavailable reviewer model also ended BLOCKED, with no alternate reviewer model or approval.
 
-Additional live checks verified an informational answer with no workspace changes and a reviewer changed to `gpt-6.1-sol`, retained through reinstall and observed in the actual native callback. Trusted hook and role loading have been observed in the desktop chat. Its final positive review remains pending because that chat uses a parent workspace exceeding 20000 files. This prerelease is not a completed desktop release certificate.
+Additional live checks verified an informational answer with no workspace changes and a reviewer changed to `gpt-6.1-sol`, retained through reinstall and observed in the actual native callback. Trusted alpha.2 hook and role loading have been observed in the desktop chat. Alpha.4 adds explicit task scopes to address its oversized parent workspace; the updated desktop installation and final positive receipt remain separate checks. This prerelease is not a completed desktop release certificate.
 
 Earlier probes failed because the portable package format omitted hooks and the live fixture did not expose its roles. The current live fixture passes process-only hook and role declarations to the native client, reusing account authentication without changing the main profile. A separate isolated installed-plugin test verifies package discovery and Stop continuation with a deterministic local API fixture. Those two tests establish different parts of the contract; they do not certify every desktop UI path or host version.
 
@@ -81,10 +101,14 @@ node tests/native-flow.mjs /absolute/path/to/codex stale
 node tests/native-flow.mjs /absolute/path/to/codex unavailable
 node tests/native-flow.mjs /absolute/path/to/codex noncode
 node tests/native-flow.mjs /absolute/path/to/codex replacement
+node tests/native-flow.mjs /absolute/path/to/codex scoped
+node tests/native-flow.mjs /absolute/path/to/codex scoped-stale
 node tests/native-protocol.mjs /absolute/path/to/codex
 ```
 
 Snapshots include tracked and untracked non-ignored Git files. Outside Git, the helper scans ordinary files. It excludes `.git`, `node_modules`, `private docs`, `.test-artifacts`, `.next`, `.venv`, `__pycache__`, `.env` files, common private key files, `auth.json`, and `credentials.json`. It rejects symlinks and special files. Limits are 20000 files and 128 MiB per snapshot. Excluded files and remote effects require separate review evidence. Tests must not rely on the snapshot as proof for those effects.
+
+An explicitly selected eligible file is included even if Git ignores it. Adding its parent keeps that selection. The multi-project native fixtures capture a prelaunch baseline of selected content and verify that the baseline remains unchanged; they make no assertion about unselected files. Native test agents use `fork_turns: "none"` because ephemeral CLI sessions may lack the stored rollout needed for inherited context.
 
 Content equality at review start, review end, and completion does not prove uninterrupted immutability. Stop all writers before review. Hook continuation matching is cooperative, based on an exact generated prompt digest, and is not authentication. Agents inherit the parent permissions; review instructions do not create an independent read-only sandbox.
 

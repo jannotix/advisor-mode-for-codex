@@ -18,7 +18,8 @@ function fixture() {
   const start = (data = {}) => run('SubagentStart', { agent_id: 'review-1', agent_type: 'advisor_mode_reviewer', model: config.roles.reviewer.model, ...data });
   const finish = (overrides = {}, data = {}) => {
     const record = state.reviewers['review-1'];
-    const review = { taskId: state.taskId, snapshot: record.snapshot, nonce: record.nonce, verdict: 'APPROVED', checks: [{ name: 'acceptance', status: 'PASS', evidence: 'node --test: exit 0; assertion checks the requested behavior' }], findings: [], ...overrides };
+    const review = { taskId: state.taskId, configHash: record.configHash, scopeDigest: record.scopeDigest, scopeRevision: record.scopeRevision,
+      snapshot: record.snapshot, nonce: record.nonce, scopeComplete: true, verdict: 'APPROVED', checks: [{ name: 'acceptance', status: 'PASS', evidence: 'node --test: exit 0; assertion checks the requested behavior' }], findings: [], ...overrides };
     return run('SubagentStop', { agent_id: 'review-1', agent_type: 'advisor_mode_reviewer', model: config.roles.reviewer.model, last_assistant_message: `ADVISOR_MODE_REVIEW ${JSON.stringify(review)}`, ...data });
   };
   return { run, start, finish, config: fixtureConfig, get state() { return state; }, change: () => { snapshot = 'b'.repeat(64); } };
@@ -33,6 +34,20 @@ test('native reviewer approval permits completion for the current snapshot', () 
   const f = fixture(); f.start(); f.finish();
   assert.deepEqual(f.run('Stop'), {});
   assert.equal(f.state.approval.agentId, 'review-1');
+});
+
+test('pre-scope state migration clears legacy approval and requires a new bound review', () => {
+  const f = fixture(); f.start(); f.finish();
+  const legacy = structuredClone(f.state); delete legacy.scope;
+  delete legacy.approval.scopeDigest; delete legacy.approval.scopeRevision; delete legacy.approval.scopeComplete;
+  const result = gate(legacy, { hook_event_name: 'Stop', session_id: legacy.sessionId, cwd: legacy.cwd }, config, {
+    snapshot: () => 'a'.repeat(64), nonce: () => 'migration-nonce'
+  });
+  assert.equal(result.state.scope.mode, 'workspace');
+  assert.equal(result.state.approval, null); assert.deepEqual(result.state.reviewers, {});
+  assert.equal(result.output.decision, 'block');
+  assert.match(result.state.reason, /fresh scope-bound review/);
+  assert.equal(legacy.scope, undefined); assert.ok(legacy.approval);
 });
 test('negative review cannot approve', () => {
   const f = fixture(); f.start(); f.finish({ verdict: 'CHANGES_REQUIRED', findings: ['Wrong return value.'] });
@@ -65,7 +80,7 @@ test('wrong model and unrelated role cannot supply a review', () => {
   assert.equal(f.state.approval, null);
 });
 test('review must include passed checks, a nonce, and no findings', () => {
-  for (const overrides of [{ checks: [] }, { nonce: 'forged' }, { findings: ['Unfixed defect.'] }, { checks: [{ name: 'x', status: 'FAIL', evidence: 'exit 1' }] }]) {
+  for (const overrides of [{ checks: [] }, { nonce: 'forged' }, { findings: ['Unfixed defect.'] }, { checks: [{ name: 'x', status: 'FAIL', evidence: 'exit 1' }] }, { scopeComplete: false }, { scopeDigest: 'wrong' }, { scopeRevision: 999 }, { configHash: 'wrong' }]) {
     const f = fixture(); f.start(); f.finish(overrides);
     assert.equal(f.state.approval, null);
   }
