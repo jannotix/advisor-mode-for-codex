@@ -57,9 +57,17 @@ if ($LASTEXITCODE -ne 0) { throw 'Cannot recheck Git status.' }
 if ($changes) { throw 'Source tree changed during release staging.' }
 [IO.Directory]::CreateDirectory($output) | Out-Null
 $archive = Join-Path $output "advisor-mode-for-codex-$version.zip"
-# ZipFile includes dot directories. Compress-Archive does not preserve this layout.
+# Include dot directories and use portable ZIP entry separators on Windows PowerShell 5.
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-[IO.Compression.ZipFile]::CreateFromDirectory($stage, $archive, [IO.Compression.CompressionLevel]::Optimal, $false)
+$zip = [IO.Compression.ZipFile]::Open($archive, [IO.Compression.ZipArchiveMode]::Create)
+try {
+    foreach ($entry in Get-ChildItem -LiteralPath $stage -File -Recurse -Force) {
+        $relative = $entry.FullName.Substring($stage.Length + 1).Replace('\', '/')
+        [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $entry.FullName, $relative, [IO.Compression.CompressionLevel]::Optimal) | Out-Null
+    }
+} finally {
+    $zip.Dispose()
+}
 $digest = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
 [IO.File]::WriteAllText("$archive.sha256", "$digest  $([IO.Path]::GetFileName($archive))`n", [Text.UTF8Encoding]::new($false))
 [ordered]@{ archive = $archive; sha256 = $digest; sourceCommit = $sourceCommit; version = $version; stagingDirectory = $stage } | ConvertTo-Json
