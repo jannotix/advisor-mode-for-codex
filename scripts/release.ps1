@@ -59,6 +59,7 @@ if ($changes) { throw 'Source tree changed during release staging.' }
 $archive = Join-Path $output "advisor-mode-for-codex-$version.zip"
 # Include dot directories and use portable ZIP entry separators on Windows PowerShell 5.
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+Add-Type -AssemblyName System.IO.Compression
 $zip = [IO.Compression.ZipFile]::Open($archive, [IO.Compression.ZipArchiveMode]::Create)
 try {
     foreach ($entry in Get-ChildItem -LiteralPath $stage -File -Recurse -Force) {
