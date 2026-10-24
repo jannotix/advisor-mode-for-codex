@@ -4,6 +4,7 @@
 
 - Prepare a manual-install release archive with its local marketplace, installation instructions, source commit and checksum.
 - Validate installation from the extracted archive without rebuilding it from source.
+- Bind release inventory to the source commit and reject ignored local files or added archive entries, even when their checksum is recalculated.
 
 - Select directories and files for one task in a chat containing multiple projects.
 - Expand coverage with `scope add`; invalidate pending and accepted reviews when coverage changes.

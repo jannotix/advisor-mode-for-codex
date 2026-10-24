@@ -44,16 +44,18 @@ try {
   assert(fs.lstatSync(archive).isFile(), 'Expected a regular ZIP archive.');
   const checksum = fs.readFileSync(archive + '.sha256', 'utf8').trim();
   assert.equal(checksum, `${hash(fs.readFileSync(archive))}  ${path.basename(archive)}`, 'ZIP checksum mismatch.');
-  const expected = new Map([
-    ['INSTALL.md', path.join(root, 'INSTALL.md')],
-    ['.agents/plugins/marketplace.json', path.join(root, '.agents/plugins/marketplace.json')]
-  ]);
-  for (const entry of packageEntries) {
-    const source = path.join(root, entry);
-    if (fs.statSync(source).isDirectory()) {
-      for (const relative of filesUnder(source)) expected.set(`dist/advisor-mode-for-codex/${entry}/${relative}`, path.join(source, relative));
-    } else expected.set(`dist/advisor-mode-for-codex/${entry}`, source);
+  assert.equal(run('git', ['-C', root, 'status', '--porcelain', '--untracked-files=all']).trim(), '', 'Release verification requires a clean source checkout.');
+  const sourceCommit = run('git', ['-C', root, 'rev-parse', 'HEAD']).trim();
+  const committed = run('git', ['-C', root, 'ls-tree', '-r', '--name-only', '-z', sourceCommit]).split('\0').filter(Boolean);
+  const expected = new Map();
+  const outer = ['INSTALL.md', '.agents/plugins/marketplace.json'];
+  for (const name of committed) {
+    assert(!name.includes('\\') && !name.startsWith('/') && !name.split('/').some(part => part === '..' || part === '.' || part.includes(':')), `Unsafe committed path: ${name}`);
+    if (outer.includes(name)) expected.set(name, path.join(root, name));
+    else if (packageEntries.some(entry => name === entry || name.startsWith(entry + '/'))) expected.set(`dist/advisor-mode-for-codex/${name}`, path.join(root, name));
   }
+  for (const name of outer) assert(expected.has(name), `Required release file absent from source commit: ${name}`);
+  for (const entry of packageEntries) assert(committed.some(name => name === entry || name.startsWith(entry + '/')), `Required package entry absent from source commit: ${entry}`);
   const inventory = JSON.parse(powershell(`
     Add-Type -AssemblyName System.IO.Compression.FileSystem;
     $zip = [IO.Compression.ZipFile]::OpenRead($env:ADVISOR_RELEASE_ZIP);
@@ -65,13 +67,14 @@ try {
     assert(!name.includes('\\') && !name.startsWith('/') && !name.split('/').some(part => part === '..' || part === '.' || part.includes(':')), `Unsafe ZIP path: ${name}`);
     if (name.endsWith('/')) assert(expectedNames.some(file => file.startsWith(name)), `Unexpected ZIP directory: ${name}`);
   }
-  assert.deepEqual(inventory.filter(name => !name.endsWith('/')).sort(), expectedNames, 'Archive inventory differs from the release allowlist.');
+  assert.deepEqual(inventory.filter(name => !name.endsWith('/')).sort(), expectedNames, 'Archive inventory differs from the committed release allowlist.');
   powershell(`Add-Type -AssemblyName System.IO.Compression.FileSystem; [IO.Compression.ZipFile]::ExtractToDirectory($env:ADVISOR_RELEASE_ZIP, $env:ADVISOR_RELEASE_DEST)`);
   assert.deepEqual(filesUnder(extracted).sort(), expectedNames);
   for (const [name, source] of expected) assert(fs.readFileSync(path.join(extracted, name)).equals(fs.readFileSync(source)), `Release bytes differ: ${name}`);
+  assert.equal(run('git', ['-C', root, 'status', '--porcelain', '--untracked-files=all']).trim(), '', 'Source checkout changed during release verification.');
+  assert.equal(run('git', ['-C', root, 'rev-parse', 'HEAD']).trim(), sourceCommit, 'Source commit changed during release verification.');
   const build = JSON.parse(fs.readFileSync(path.join(extracted, 'BUILD.json'), 'utf8').replace(/^\uFEFF/, ''));
   const version = JSON.parse(fs.readFileSync(path.join(root, '.codex-plugin/plugin.json'), 'utf8')).version;
-  const sourceCommit = run('git', ['-C', root, 'rev-parse', 'HEAD']).trim();
   assert.deepEqual(build, { sourceCommit, version }, 'Provenance does not match the tested source commit and version.');
   evidence.push({ check: 'archive allowlist, bytes, dot directories, checksum and source provenance', exit: 0, files: expectedNames, sourceCommit, version });
   fs.mkdirSync(home);

@@ -24,6 +24,13 @@ if ($LASTEXITCODE -ne 0) { throw 'Cannot read Git status.' }
 if ($changes) { throw 'Release requires a clean Git tree, including untracked development files. Commit the intended source first.' }
 $sourceCommit = & git -C $sourceRoot rev-parse HEAD
 if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[0-9a-f]{40}$') { throw 'Cannot determine source commit.' }
+$committedPaths = & git -C $sourceRoot -c core.quotepath=false ls-tree -r --name-only $sourceCommit
+if ($LASTEXITCODE -ne 0) { throw 'Cannot read committed file inventory.' }
+$committed = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($committedPath in $committedPaths) {
+    if ($committedPath -match '[\\:"\x00-\x1f]' -or $committedPath.StartsWith('/') -or $committedPath.Split('/') -contains '..') { throw "Unsupported committed path: $committedPath" }
+    $committed.Add($committedPath) | Out-Null
+}
 $version = (Get-Content -LiteralPath (Join-Path $sourceRoot '.codex-plugin/plugin.json') -Raw | ConvertFrom-Json).version
 if ($version -notmatch '^[0-9A-Za-z][0-9A-Za-z.+-]*$') { throw 'Invalid release version.' }
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $sourceRoot '.test-artifacts/releases' }
@@ -48,6 +55,13 @@ Copy-Item -LiteralPath (Join-Path $sourceRoot '.agents/plugins/marketplace.json'
 Copy-Item -LiteralPath $package -Destination (Join-Path $stage 'dist/advisor-mode-for-codex') -Recurse
 foreach ($entry in Get-ChildItem -LiteralPath $stage -Recurse -Force) {
     if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Refusing linked archive entry: $($entry.FullName)" }
+    if (-not $entry.PSIsContainer) {
+        $relative = $entry.FullName.Substring($stage.Length + 1).Replace('\', '/')
+        $sourcePath = $relative
+        $packagePrefix = 'dist/advisor-mode-for-codex/'
+        if ($sourcePath.StartsWith($packagePrefix, [StringComparison]::Ordinal)) { $sourcePath = $sourcePath.Substring($packagePrefix.Length) }
+        if (-not $committed.Contains($sourcePath)) { throw "Staged file is absent from source commit: $relative" }
+    }
 }
 @{ sourceCommit = $sourceCommit; version = $version } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stage 'BUILD.json') -Encoding utf8
 $currentCommit = & git -C $sourceRoot rev-parse HEAD
