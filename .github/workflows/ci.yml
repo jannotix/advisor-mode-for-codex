@@ -28,8 +28,11 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-      # No style linter exists; npm run check is the project's own consistency check.
-      - run: npm run check
+      - name: Project consistency check
+        run: |
+          # No style linter exists. npm run check compares manifest, package and hooks; it checks no code style.
+          echo "::notice::No style linter is configured. This job runs the project consistency check only."
+          npm run check
 
   static:
     runs-on: ubuntu-latest
